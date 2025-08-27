@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, master ]
     tags:
-      - 'v*'                 # npr. v0.1.0
+      - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write            # obvezno za push na ghcr.io
+  packages: write
 
 jobs:
   build-and-push:
@@ -20,25 +20,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Nastavi IMAGE na ghcr.io/owner/repo v lowercase
-      - name: xdata-search
-        id: prep
+      # ↓↓↓ popravljen korak (brez ${var,,})
+      - name: Prepare image name (lowercase)
+        shell: bash
         run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-          echo "IMAGE_TAGS=latest" >> $GITHUB_ENV
-          echo "Image will be: ghcr.io/${GITHUB_REPOSITORY,,}"
-      
-      # Ustvari minimalni Dockerfile, če ga v repozitoriju ni
+          IMAGE_LOWER=$(echo "ghcr.io/${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=${IMAGE_LOWER}" >> "$GITHUB_ENV"
+          echo "Using image: ${IMAGE_LOWER}"
+
+      # Ustvari minimalni Dockerfile, če manjka
       - name: Generate Dockerfile if missing
+        shell: bash
         run: |
           if [ ! -f Dockerfile ]; then
-            cat > Dockerfile <<'EOF'
-FROM docker.io/searxng/searxng:latest
-# Sem lahko kasneje dodaš COPY/ENV za prilagoditve
-EOF
+            printf '%s\n' 'FROM docker.io/searxng/searxng:latest' > Dockerfile
           fi
           echo "----- Dockerfile -----"
-          cat Dockerfile
+          nl -ba Dockerfile | sed -n '1,20p'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -53,7 +51,6 @@ EOF
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Ustvari pravilne tage (latest na default veji, verzija ob tagu, SHA kot fallback)
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -71,7 +68,6 @@ EOF
         with:
           context: .
           file: ./Dockerfile
-          # Če želiš najprej testno: platforms: linux/amd64
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
