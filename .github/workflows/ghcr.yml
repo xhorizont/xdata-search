@@ -1,18 +1,15 @@
-name: Build & Publish to GHCR (one-file)
+name: Build & Publish to GHCR (one-file, fixed)
 
 on:
   push:
     branches: [ main, master ]
     tags:
-      - 'v*'                # npr. v0.1.0
+      - 'v*'                 # npr. v0.1.0
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write          # nujno za push na ghcr.io
-
-env:
-  IMAGE: ghcr.io/${{ github.repository }}   # ghcr.io/OWNER/REPO
+  packages: write            # obvezno za push na ghcr.io
 
 jobs:
   build-and-push:
@@ -23,15 +20,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Ustvari minimalni Dockerfile, če v repozitoriju ne obstaja.
-      # Za začetek samo re-tagga uradno SearXNG sliko.
-      - name: Generate Dockerfile
+      # Nastavi IMAGE na ghcr.io/owner/repo v lowercase
+      - name: xdata-search
+        id: prep
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "IMAGE_TAGS=latest" >> $GITHUB_ENV
+          echo "Image will be: ghcr.io/${GITHUB_REPOSITORY,,}"
+      
+      # Ustvari minimalni Dockerfile, če ga v repozitoriju ni
+      - name: Generate Dockerfile if missing
         run: |
           if [ ! -f Dockerfile ]; then
             cat > Dockerfile <<'EOF'
-            FROM docker.io/searxng/searxng:latest
-            # Tukaj lahko kasneje dodaš COPY za branding/teme, ko boš imel datoteke.
-            EOF
+FROM docker.io/searxng/searxng:latest
+# Sem lahko kasneje dodaš COPY/ENV za prilagoditve
+EOF
           fi
           echo "----- Dockerfile -----"
           cat Dockerfile
@@ -49,13 +53,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Ustvari pravilne tage (latest na default veji, verzija ob tagu, SHA kot fallback)
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=ref,event=tag                      # vX.Y.Z ob tagu
+            type=ref,event=tag
             type=raw,value=latest,enable={{ is_default_branch }}
             type=sha,format=long
           labels: |
@@ -66,6 +71,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          # Če želiš najprej testno: platforms: linux/amd64
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
