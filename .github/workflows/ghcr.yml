@@ -1,15 +1,15 @@
-name: Build & Publish to GHCR
+name: Build & Publish to GHCR (one-file)
 
 on:
   push:
     branches: [ main, master ]
     tags:
-      - 'v*'                 # npr. v0.1.0
+      - 'v*'                # npr. v0.1.0
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write            # obvezno za push na ghcr.io
+  packages: write          # nujno za push na ghcr.io
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}   # ghcr.io/OWNER/REPO
@@ -17,12 +17,24 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Ustvari minimalni Dockerfile, če v repozitoriju ne obstaja.
+      # Za začetek samo re-tagga uradno SearXNG sliko.
+      - name: Generate Dockerfile
+        run: |
+          if [ ! -f Dockerfile ]; then
+            cat > Dockerfile <<'EOF'
+            FROM docker.io/searxng/searxng:latest
+            # Tukaj lahko kasneje dodaš COPY za branding/teme, ko boš imel datoteke.
+            EOF
+          fi
+          echo "----- Dockerfile -----"
+          cat Dockerfile
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -43,9 +55,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=ref,event=tag                 # vX.Y.Z ob tagu
-            type=raw,value=latest,enable={{ is_default_branch }}  # latest na default branchu
-            type=sha,format=long               # fallback: sha
+            type=ref,event=tag                      # vX.Y.Z ob tagu
+            type=raw,value=latest,enable={{ is_default_branch }}
+            type=sha,format=long
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
 
@@ -53,7 +65,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./container/Dockerfile        # spremeni, če je Dockerfile drugje
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
