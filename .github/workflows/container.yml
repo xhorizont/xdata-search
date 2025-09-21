@@ -209,7 +209,7 @@ jobs:
         run: make container.test
 
   release:
-    if: github.repository_owner == 'searxng' && github.ref_name == 'master'
+    if: github.repository_owner == 'xdata-search' && github.ref_name == 'master'
     name: Release
     runs-on: ubuntu-24.04-arm
     needs:
